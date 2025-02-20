@@ -1,51 +1,77 @@
-import Head from 'next/head' // اضافه کردن Head از Next.js
+import { Hono } from 'hono'
+import { request, gql } from 'graphql-request'
+import { serve } from '@hono/node-server'
 
-export default function Home({ fid, moxieStatus }) {
+const app = new Hono()
+
+console.log("Starting server...");
+
+async function getMoxieStatus(fid = "602") {
+  console.log("Fetching Moxie status for FID:", fid);
+  const query = gql`
+    query MoxieStatus {
+      FarcasterMoxieClaimDetails(
+        input: { filter: { fid: { _eq: "${fid}" } }, blockchain: ALL }
+      ) {
+        FarcasterMoxieClaimDetails {
+          availableClaimAmount
+          claimedAmount
+          processingAmount
+        }
+      }
+    }
+  `
+  const endpoint = 'https://api.airstack.xyz/gql'
+  const apiKey = process.env.AIRSTACK_API_KEY;
+  if (!apiKey) console.error("AIRSTACK_API_KEY is not set!");
+  const headers = { Authorization: apiKey }
+
+  try {
+    const data = await request(endpoint, query, {}, headers)
+    console.log("API response:", JSON.stringify(data, null, 2));
+    const details = data.FarcasterMoxieClaimDetails.FarcasterMoxieClaimDetails[0] || {}
+    return {
+      claimable: details.availableClaimAmount || 0,
+      claimed: details.claimedAmount || 0,
+      processing: details.processingAmount || 0,
+    }
+  } catch (error) {
+    console.error("Error fetching Moxie status:", error.message);
+    throw error; // خطا رو پرت کن تا توی لاگ Vercel ببینیم
+  }
+}
+
+app.get('/', async (c) => {
+  console.log("Handling GET request to /");
+  const fid = c.req.query('fid') || "602"
+  const moxieStatus = await getMoxieStatus(fid)
+  console.log("Moxie status fetched:", moxieStatus);
   const imageText = `
     Moxie Status:
     Claimable: ${moxieStatus.claimable.toFixed(2)} MOXIE
     Claimed: ${moxieStatus.claimed.toFixed(2)} MOXIE
     Processing: ${moxieStatus.processing.toFixed(2)} MOXIE
   `
+  const imageUrl = `https://via.placeholder.com/600x400.png?text=${encodeURIComponent(imageText)}`
 
-  return (
-    <>
-      <Head>
-        <meta property="og:image" content={`https://via.placeholder.com/600x400.png?text=${encodeURIComponent(imageText)}`} />
-        <meta property="fc:frame" content="vNext" />
-        <meta property="fc:frame:image" content={`https://via.placeholder.com/600x400.png?text=${encodeURIComponent(imageText)}`} />
-        <meta property="fc:frame:button:1" content="Refresh" />
-        <meta property="fc:frame:button:1:action" content="post" />
-        <meta property="fc:frame:button:1:target" content={`${process.env.NEXT_PUBLIC_VERCEL_URL ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}` : 'http://localhost:3000'}`} />
-      </Head>
-      <h1>Moxie Status for FID: {fid}</h1>
-      <p>{imageText.split('\n').map((line, i) => <span key={i}>{line}<br /></span>)}</p>
-    </>
-  )
-}
+  return c.html(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta property="og:image" content="${imageUrl}">
+        <meta property="fc:frame" content="vNext">
+        <meta property="fc:frame:image" content="${imageUrl}">
+        <meta property="fc:frame:button:1" content="Refresh">
+        <meta property="fc:frame:button:1:action" content="post">
+        <meta property="fc:frame:button:1:target" content="${c.req.url}">
+      </head>
+      <body>
+        <h1>Moxie Status for FID: ${fid}</h1>
+        <p>${imageText.replace(/\n/g, '<br>')}</p>
+      </body>
+    </html>
+  `)
+})
 
-export async function getServerSideProps({ query }) {
-  const fid = query.fid || "602"
-  const res = await fetch(`http://localhost:3000/api/moxie?fid=${fid}`, {
-    method: 'GET',
-  })
-
-  if (!res.ok) {
-    console.error("خطا در پاسخ API:", await res.text())
-    return {
-      props: {
-        fid,
-        moxieStatus: { claimable: 0, claimed: 0, processing: 0 },
-      },
-    }
-  }
-
-  const moxieStatus = await res.json()
-
-  return {
-    props: {
-      fid,
-      moxieStatus,
-    },
-  }
-}
+console.log("Server setup complete, starting...");
+serve(app, () => console.log('Server running on http://localhost:3000'))
