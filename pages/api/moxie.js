@@ -15,8 +15,9 @@ async function getMoxieStatus(fid = "602") {
       }
     }
   `
+  
   const endpoint = 'https://api.airstack.xyz/gql'
-  const headers = { Authorization:process.env.AIRSTACK_API_KEY = "13827f8b8c521443da97ed54d4d6a891d" }
+  const headers = { Authorization: "13827f8b8c521443da97ed54d4d6a891d" }
 
   try {
     const data = await request(endpoint, query, {}, headers)
