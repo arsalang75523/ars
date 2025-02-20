@@ -4,10 +4,7 @@ import { serve } from '@hono/node-server'
 
 const app = new Hono()
 
-console.log("Starting server...");
-
 async function getMoxieStatus(fid = "602") {
-  console.log("Fetching Moxie status for FID:", fid);
   const query = gql`
     query MoxieStatus {
       FarcasterMoxieClaimDetails(
@@ -21,14 +18,11 @@ async function getMoxieStatus(fid = "602") {
       }
     }
   `
-  const endpoint = 'https://api.airstack.xyz/gql'
-  const apiKey = process.env.AIRSTACK_API_KEY;
-  if (!apiKey) console.error("AIRSTACK_API_KEY is not set!");
-  const headers = { Authorization: apiKey }
+  const endpoint = 'https://api.airstack.xyz/gql' // این باید درست باشه
+  const headers = { Authorization: process.env.AIRSTACK_API_KEY || "" }
 
   try {
     const data = await request(endpoint, query, {}, headers)
-    console.log("API response:", JSON.stringify(data, null, 2));
     const details = data.FarcasterMoxieClaimDetails.FarcasterMoxieClaimDetails[0] || {}
     return {
       claimable: details.availableClaimAmount || 0,
@@ -36,16 +30,14 @@ async function getMoxieStatus(fid = "602") {
       processing: details.processingAmount || 0,
     }
   } catch (error) {
-    console.error("Error fetching Moxie status:", error.message);
-    throw error; // خطا رو پرت کن تا توی لاگ Vercel ببینیم
+    console.error("Error fetching Moxie status:", error)
+    throw error
   }
 }
 
 app.get('/', async (c) => {
-  console.log("Handling GET request to /");
   const fid = c.req.query('fid') || "602"
   const moxieStatus = await getMoxieStatus(fid)
-  console.log("Moxie status fetched:", moxieStatus);
   const imageText = `
     Moxie Status:
     Claimable: ${moxieStatus.claimable.toFixed(2)} MOXIE
@@ -73,5 +65,4 @@ app.get('/', async (c) => {
   `)
 })
 
-console.log("Server setup complete, starting...");
-serve(app, () => console.log('Server running on http://localhost:3000'))
+serve(app, () => console.log('Server running'))
